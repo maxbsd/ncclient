@@ -54,8 +54,8 @@ class SSHSession(Session):
 
     "Implements a :rfc:`4742` NETCONF session over SSH."
 
-    def __init__(self, capabilities):
-        Session.__init__(self, capabilities)
+    def __init__(self, capabilities, vendor=None):
+        Session.__init__(self, capabilities, vendor)
         self._host_keys = paramiko.HostKeys()
         self._transport = None
         self._connected = False

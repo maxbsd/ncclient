@@ -29,6 +29,8 @@ class XMLError(NCClientError): pass
 
 #: Base NETCONF namespace
 BASE_NS_1_0 = "urn:ietf:params:xml:ns:netconf:base:1.0"
+#: Base NETCONF non-xml namespace
+BASE_NS_NONXML_1_0 = "urn:ietf:params:netconf:base:1.0"
 #: Namespace for Tail-f core data model
 TAILF_AAA_1_1 = "http://tail-f.com/ns/aaa/1.1"
 #: Namespace for Tail-f execd data model
@@ -39,7 +41,9 @@ CISCO_CPI_1_0 = "http://www.cisco.com/cpi_10/schema"
 FLOWMON_1_0 = "http://www.liberouter.org/ns/netopeer/flowmon/1.0"
 #: Namespace for Juniper 9.6R4. Tested with Junos 9.6R4+
 JUNIPER_1_1 = "http://xml.juniper.net/xnm/1.1/xnm"
-#
+#: Namespace for Brocade data model
+BROCADE_1_0 = "http://brocade.com/ns/netconf/config/netiron-config/"
+
 try:
     register_namespace = ET.register_namespace
 except AttributeError:
@@ -51,13 +55,22 @@ register_namespace.func_doc = "ElementTree's namespace map determines the prefix
 
 for (ns, pre) in {
     BASE_NS_1_0: 'nc',
+    BASE_NS_NONXML_1_0: 'nc',
     TAILF_AAA_1_1: 'aaa',
     TAILF_EXECD_1_1: 'execd',
     CISCO_CPI_1_0: 'cpi',
     FLOWMON_1_0: 'fm',
     JUNIPER_1_1: 'junos',
+    BROCADE_1_0: 'brcd'
 }.items(): 
     register_namespace(pre, ns)
+
+
+VENDOR = {
+    'BROCADE': '1',
+    'CISCO': '2'
+}
+
 
 qualify = lambda tag, ns=BASE_NS_1_0: tag if ns is None else "{%s}%s" % (ns, tag)
 """Qualify a *tag* name with a *namespace*, in :mod:`~xml.etree.ElementTree` fashion i.e. *{namespace}tagname*."""
@@ -69,7 +82,14 @@ def to_xml(ele, encoding="UTF-8"):
 
 def to_ele(x):
     "Convert and return the :class:`~xml.etree.ElementTree.Element` for the XML document *x*. If *x* is already an :class:`~xml.etree.ElementTree.Element` simply returns that."
-    return x if ET.iselement(x) else ET.fromstring(x)
+    #return x if ET.iselement(x) else ET.fromstring(x)
+    try:
+        print x
+        if ET.iselement(x):
+            return x
+        return ET.fromstring(x)
+    except Exception as err:
+        print err
 
 def parse_root(raw):
     "Efficiently parses the root element of a *raw* XML document, returning a tuple of its qualified name and attribute dictionary."
@@ -106,3 +126,5 @@ new_ele = lambda tag, attrs={}, **extra: ET.Element(qualify(tag), attrs, **extra
 
 sub_ele = lambda parent, tag, attrs={}, **extra: ET.SubElement(parent, qualify(tag), attrs, **extra)
 
+brcd_new_ele = lambda tag, ns, attrs={}, **extra: ET.Element(qualify(tag, ns), attrs, **extra)
+brcd_sub_ele = lambda parent, tag, ns, attrs={}, **extra: ET.SubElement(parent, qualify(tag, ns), attrs, **extra)

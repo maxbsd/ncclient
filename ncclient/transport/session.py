@@ -27,7 +27,7 @@ class Session(Thread):
 
     "Base class for use by transport protocol implementations."
 
-    def __init__(self, capabilities):
+    def __init__(self, capabilities, vendor=None):
         Thread.__init__(self)
         self.setDaemon(True)
         self._listeners = set()
@@ -40,6 +40,7 @@ class Session(Thread):
         self._connected = False # to be set/cleared by subclass implementation
         logger.debug('%r created: client_capabilities=%r' %
                      (self, self._client_capabilities))
+        self._vendor = vendor
 
     def _dispatch_message(self, raw):
         try:
@@ -50,8 +51,8 @@ class Session(Thread):
         with self._lock:
             listeners = list(self._listeners)
         for l in listeners:
-            logger.debug('dispatching message to %r: %s' % (l, raw))
-            l.callback(root, raw) # no try-except; fail loudly if you must!
+            logger.debug('dispatching message to: %r: %s' % (l, raw))
+            l.callback(root, raw, self._vendor) # no try-except; fail loudly if you must!
     
     def _dispatch_error(self, err):
         with self._lock:
@@ -77,7 +78,7 @@ class Session(Thread):
             init_event.set()
         listener = HelloHandler(ok_cb, err_cb)
         self.add_listener(listener)
-        self.send(HelloHandler.build(self._client_capabilities))
+        self.send(HelloHandler.build(self._client_capabilities, self._vendor))
         logger.debug('starting main loop')
         self.start()
         # we expect server's hello message
@@ -134,7 +135,7 @@ class Session(Thread):
         """Send the supplied *message* (xml string) to NETCONF server."""
         if not self.connected:
             raise TransportError('Not connected to NETCONF server')
-        logger.debug('queueing %s' % message)
+        logger.debug('queueing: %s' % message)
         self._q.put(message)
 
     ### Properties
@@ -169,7 +170,7 @@ class SessionListener(object):
         Avoid time-intensive tasks in a callback's context.
     """
 
-    def callback(self, root, raw):
+    def callback(self, root, raw, vendor=None):
         """Called when a new XML document is received. The *root* argument allows the callback to determine whether it wants to further process the document.
 
         Here, *root* is a tuple of *(tag, attributes)* where *tag* is the qualified name of the root element and *attributes* is a dictionary of its attributes (also qualified names).
@@ -192,7 +193,7 @@ class HelloHandler(SessionListener):
         self._init_cb = init_cb
         self._error_cb = error_cb
 
-    def callback(self, root, raw):
+    def callback(self, root, raw, vendor=None):
         tag, attrs = root
         if (tag == qualify("hello")) or (tag == "hello"):
             try:
@@ -206,11 +207,22 @@ class HelloHandler(SessionListener):
         self._error_cb(err)
 
     @staticmethod
-    def build(capabilities):
+    def build(capabilities, vendor):
         "Given a list of capability URI's returns <hello> message XML string"
+        if vendor == VENDOR['BROCADE']:
+            return HelloHandler.brcd_build(capabilities)
+
         hello = new_ele("hello")
         caps = sub_ele(hello, "capabilities")
         def fun(uri): sub_ele(caps, "capability").text = uri
+        map(fun, capabilities)
+        return to_xml(hello)
+
+    @staticmethod
+    def brcd_build(capabilities):
+        hello = brcd_new_ele("hello", None, {'xmlns':"urn:ietf:params:xml:ns:netconf:base:1.0"})
+        caps = brcd_sub_ele(hello, "capabilities", None)
+        def fun(uri): brcd_sub_ele(caps, "capability", None).text = uri
         map(fun, capabilities)
         return to_xml(hello)
 

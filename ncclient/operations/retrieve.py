@@ -25,7 +25,8 @@ class GetReply(RPCReply):
     def _parsing_hook(self, root):
         self._data = None
         if not self._errors:
-            self._data = root.find(qualify("data"))
+            qns = BASE_NS_NONXML_1_0 if self._vendor == VENDOR['CISCO'] else BASE_NS_1_0
+            self._data = root.find(qualify("data", qns))
     
     @property
     def data_ele(self):
@@ -61,7 +62,7 @@ class Get(RPC):
         """
         node = new_ele("get")
         if filter is not None:
-            node.append(util.build_filter(filter))
+            node.append(util.build_filter(filter, self._vendor))
         return self._request(node)
 
 
@@ -83,7 +84,7 @@ class GetConfig(RPC):
         node = new_ele("get-config")
         node.append(util.datastore_or_url("source", source, self._assert))
         if filter is not None:
-            node.append(util.build_filter(filter))
+            node.append(util.build_filter(filter, self._vendor))
         return self._request(node)
 
 class Dispatch(RPC):
@@ -122,6 +123,6 @@ class Dispatch(RPC):
         if source is not None:
             node.append(util.datastore_or_url("source", source, self._assert))
         if filter is not None:
-            node.append(util.build_filter(filter))
+            node.append(util.build_filter(filter, self._vendor))
         return self._request(node)
 

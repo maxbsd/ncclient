@@ -57,15 +57,17 @@ OPERATIONS = {
 }
 """Dictionary of method names and corresponding :class:`~ncclient.operations.RPC` subclasses. It is used to lookup operations, e.g. `get_config` is mapped to :class:`~ncclient.operations.GetConfig`. It is thus possible to add additional operations to the :class:`Manager` API."""
 
+
 def connect_ssh(*args, **kwds):
     """Initialize a :class:`Manager` over the SSH transport. For documentation of arguments see :meth:`ncclient.transport.SSHSession.connect`.
 
     The underlying :class:`ncclient.transport.SSHSession` is created with :data:`CAPABILITIES`. It is first instructed to :meth:`~ncclient.transport.SSHSession.load_known_hosts` and then  all the provided arguments are passed directly to its implementation of :meth:`~ncclient.transport.SSHSession.connect`.
     """
-    session = transport.SSHSession(capabilities.Capabilities(CAPABILITIES))
+    vendor = kwds.pop('vendor', None)
+    session = transport.SSHSession(capabilities.Capabilities(CAPABILITIES), vendor)
     session.load_known_hosts()
     session.connect(*args, **kwds)
-    return Manager(session)
+    return Manager(session, vendor=vendor)
 
 connect = connect_ssh
 "Same as :func:`connect_ssh`, since SSH is the default (and currently, the only) transport."
@@ -102,11 +104,12 @@ class Manager(object):
 
     __metaclass__ = OpExecutor
 
-    def __init__(self, session, timeout=30):
+    def __init__(self, session, timeout=30, vendor=None):
         self._session = session
         self._async_mode = False
         self._timeout = timeout
         self._raise_mode = operations.RaiseMode.ALL
+        self._vendor = vendor
 
     def __enter__(self):
         return self
@@ -129,7 +132,8 @@ class Manager(object):
         return cls(self._session,
                    async=self._async_mode,
                    timeout=self._timeout,
-                   raise_mode=self._raise_mode).request(*args, **kwds)
+                   raise_mode=self._raise_mode,
+                   vendor=self._vendor).request(*args, **kwds)
 
     def locked(self, target):
         """Returns a context manager for a lock on a datastore, where *target* is the name of the configuration datastore to lock, e.g.::

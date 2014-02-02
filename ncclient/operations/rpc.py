@@ -89,7 +89,7 @@ class RPCError(OperationError):
         return self._info
 
 
-class RPCReply:
+class RPCReply(object):
 
     """Represents an *rpc-reply*. Only concerns itself with whether the operation was successful.
 
@@ -101,11 +101,12 @@ class RPCReply:
     ERROR_CLS = RPCError
     "Subclasses can specify a different error class, but it should be a subclass of `RPCError`."
     
-    def __init__(self, raw):
+    def __init__(self, raw, vendor=None):
         self._raw = raw
         self._parsed = False
         self._root = None
         self._errors = []
+        self._vendor = vendor
 
     def __repr__(self):
         return self._raw
@@ -115,10 +116,11 @@ class RPCReply:
         if self._parsed: return
         root = self._root = to_ele(self._raw) # The <rpc-reply> element
         # Per RFC 4741 an <ok/> tag is sent when there are no errors or warnings
-        ok = root.find(qualify("ok"))
+        qns = BASE_NS_NONXML_1_0 if self._vendor == VENDOR['CISCO'] else BASE_NS_1_0
+        ok = root.find(qualify("ok", qns))
         if ok is None:
             # Create RPCError objects from <rpc-error> elements
-            error = root.find(qualify("rpc-error"))
+            error = root.find(qualify("rpc-error", qns))
             if error is not None:
                 for err in root.getiterator(error.tag):
                     # Process a particular <rpc-error>
@@ -176,9 +178,10 @@ class RPCReplyListener(SessionListener): # internal use
         with self._lock:
             self._id2rpc[id] = rpc
 
-    def callback(self, root, raw):
+    def callback(self, root, raw, vendor=None):
         tag, attrs = root
-        if tag != qualify("rpc-reply"):
+        qns = BASE_NS_NONXML_1_0 if vendor == VENDOR['CISCO'] else BASE_NS_1_0
+        if tag != qualify("rpc-reply", qns):
             return
         for key in attrs: # in the <rpc-reply> attributes
             if key == "message-id": # if we found msgid attr
@@ -228,7 +231,7 @@ class RPC(object):
     REPLY_CLS = RPCReply
     "By default :class:`RPCReply`. Subclasses can specify a :class:`RPCReply` subclass."
     
-    def __init__(self, session, async=False, timeout=30, raise_mode=RaiseMode.NONE):
+    def __init__(self, session, async=False, timeout=30, raise_mode=RaiseMode.NONE, vendor=None):
         """
         *session* is the :class:`~ncclient.transport.Session` instance
 
@@ -247,12 +250,14 @@ class RPC(object):
         self._async = async
         self._timeout = timeout
         self._raise_mode = raise_mode
-        self._id = uuid1().urn # Keeps things simple instead of having a class attr with running ID that has to be locked
+        # maxbsd: limit _id to 7 chars since Brocade doesn't respond well to well-formed GUID
+        self._id = uuid1().urn[-7:]  # Keeps things simple instead of having a class attr with running ID that has to be locked
         self._listener = RPCReplyListener(session)
         self._listener.register(self._id, self)
         self._reply = None
         self._error = None
         self._event = Event()
+        self._vendor = vendor
     
     def _wrap(self, subele):
         # internal use
@@ -308,14 +313,14 @@ class RPC(object):
     
     def deliver_reply(self, raw):
         # internal use
-        self._reply = self.REPLY_CLS(raw)
+        self._reply = self.REPLY_CLS(raw, self._vendor)
         self._event.set()
 
     def deliver_error(self, err):
         # internal use
         self._error = err
         self._event.set()
-    
+
     @property
     def reply(self):
         ":class:`RPCReply` element if reply has been received or `None`"

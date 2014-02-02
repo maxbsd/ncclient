@@ -45,11 +45,16 @@ def datastore_or_url(wha, loc, capcheck=None):
         sub_ele(node, loc)
     return node
 
-def build_filter(spec, capcheck=None):
+def build_filter(spec, vendor, capcheck=None):
     type = None
     if isinstance(spec, tuple):
         type, criteria = spec
-        rep = new_ele("filter", type=type)
+        if vendor == VENDOR['BROCADE']:
+            # Brocades want the netconf prefix on subtree filter attribute
+            rep = new_ele("filter", {'nc:type': type})
+        else:
+            rep = new_ele("filter", type=type)
+
         if type == "xpath":
             rep.attrib["select"] = criteria
         elif type == "subtree":
@@ -57,8 +62,7 @@ def build_filter(spec, capcheck=None):
         else:
             raise OperationError("Invalid filter type")
     else:
-        rep = validated_element(spec, ("filter", qualify("filter")),
-                                        attrs=("type",))
+        rep = validated_element(spec, ("filter", qualify("filter")), attrs=("type",))
         # TODO set type var here, check if select attr present in case of xpath..
     if type == "xpath" and capcheck is not None:
         capcheck(":xpath")

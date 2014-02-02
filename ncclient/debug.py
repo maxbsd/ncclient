@@ -16,7 +16,7 @@ from ncclient.transport import SessionListener
 
 class PrintListener(SessionListener):
 
-    def callback(self, root, raw):
+    def callback(self, root, raw, vendor=None):
         print('\n# RECEIVED MESSAGE with root=[tag=%r, attrs=%r] #\n%r\n' %
               (root[0], root[1], raw))
 

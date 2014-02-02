@@ -42,7 +42,11 @@ class EditConfig(RPC):
 
         The `"rollback-on-error"` *error_option* depends on the `:rollback-on-error` capability.
         """
-        node = new_ele("edit-config")
+        if self._vendor == VENDOR['BROCADE']:
+            node = brcd_new_ele("edit-config", None, {'xmlns': "urn:ietf:params:xml:ns:netconf:base:1.0"})
+        else:
+            node = new_ele("edit-config")
+
         node.append(util.datastore_or_url("target", target, self._assert))
         if error_option is not None:
             if error_option == "rollback-on-error":
